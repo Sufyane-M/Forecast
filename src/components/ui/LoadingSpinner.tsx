@@ -1,0 +1,72 @@
+import React from 'react'
+import { Loader2 } from 'lucide-react'
+
+interface LoadingSpinnerProps {
+  size?: 'sm' | 'md' | 'lg'
+  className?: string
+}
+
+export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({ 
+  size = 'md', 
+  className = '' 
+}) => {
+  const sizeClasses = {
+    sm: 'h-4 w-4',
+    md: 'h-6 w-6',
+    lg: 'h-8 w-8'
+  }
+
+  return (
+    <Loader2 
+      className={`animate-spin text-[#0D3F85] ${sizeClasses[size]} ${className}`} 
+    />
+  )
+}
+
+interface LoadingStateProps {
+  message?: string
+  className?: string
+}
+
+export const LoadingState: React.FC<LoadingStateProps> = ({ 
+  message = 'Caricamento in corso...', 
+  className = '' 
+}) => {
+  return (
+    <div className={`flex flex-col items-center justify-center py-12 ${className}`}>
+      <LoadingSpinner size="lg" />
+      <p className="mt-4 text-sm text-[#333333]/60">{message}</p>
+    </div>
+  )
+}
+
+interface ErrorStateProps {
+  message: string
+  onRetry?: () => void
+  className?: string
+}
+
+export const ErrorState: React.FC<ErrorStateProps> = ({ 
+  message, 
+  onRetry, 
+  className = '' 
+}) => {
+  return (
+    <div className={`flex flex-col items-center justify-center py-12 ${className}`}>
+      <div className="text-[#C42024] mb-4">
+        <svg className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+        </svg>
+      </div>
+      <p className="text-sm text-[#333333] text-center mb-4">{message}</p>
+      {onRetry && (
+        <button
+          onClick={onRetry}
+          className="px-4 py-2 bg-[#0D3F85] text-white rounded-md text-sm hover:bg-[#0D3F85]/90 transition-colors"
+        >
+          Riprova
+        </button>
+      )}
+    </div>
+  )
+}
