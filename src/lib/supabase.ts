@@ -11,7 +11,13 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: true
+    detectSessionInUrl: true,
+    // Refresh token 5 minutes before expiry
+    refreshTokenMargin: 300,
+    // Storage key for session persistence
+    storageKey: 'forecast-auth-token',
+    // Debug mode for development
+    debug: import.meta.env.DEV
   }
 })
 

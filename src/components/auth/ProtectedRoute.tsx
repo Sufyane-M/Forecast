@@ -1,6 +1,7 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '../../stores/authStore'
+import { useSessionManager } from '../../hooks/useSessionManager'
 import { Layout } from '../Layout'
 
 interface ProtectedRouteProps {
@@ -16,6 +17,19 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 }) => {
   const { user, profile, loading } = useAuthStore()
   const location = useLocation()
+  const { isExpiringSoon, timeUntilExpiry } = useSessionManager()
+
+  // Listen for session expiring events
+  useEffect(() => {
+    const handleSessionExpiring = (event: CustomEvent) => {
+      const minutesLeft = event.detail.minutesLeft
+      // You can show a toast notification here
+      console.warn(`Session expires in ${minutesLeft} minutes`)
+    }
+
+    window.addEventListener('sessionExpiring', handleSessionExpiring as EventListener)
+    return () => window.removeEventListener('sessionExpiring', handleSessionExpiring as EventListener)
+  }, [])
 
   // Show loading spinner while checking auth
   if (loading) {

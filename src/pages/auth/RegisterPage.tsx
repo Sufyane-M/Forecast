@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -75,7 +75,12 @@ export const RegisterPage: React.FC = () => {
           setError('Errore durante la registrazione. Riprova.')
         }
       } else {
+        // Ora la verifica email è sempre richiesta
         setSuccess(true)
+        // Reindirizza automaticamente al login dopo 3 secondi
+        setTimeout(() => {
+          navigate('/auth/login')
+        }, 3000)
       }
     } catch (err) {
       setError('Errore di connessione. Riprova.')
@@ -84,6 +89,15 @@ export const RegisterPage: React.FC = () => {
     }
   }
 
+  const [countdown, setCountdown] = useState(3)
+
+  useEffect(() => {
+    if (success && countdown > 0) {
+      const timer = setTimeout(() => setCountdown(countdown - 1), 1000)
+      return () => clearTimeout(timer)
+    }
+  }, [success, countdown])
+
   if (success) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-[#0D3F85]/5 to-white flex items-center justify-center p-4">
@@ -91,19 +105,24 @@ export const RegisterPage: React.FC = () => {
           <Card variant="elevated">
             <CardContent className="text-center py-8">
               <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <CheckCircle className="w-8 h-8 text-green-600" />
+                <Mail className="w-8 h-8 text-green-600" />
               </div>
               <h2 className="text-xl font-semibold text-[#333333] mb-2">
-                Registrazione completata!
+                📩 Registrazione completata!
               </h2>
-              <p className="text-[#333333]/60 mb-6">
-                Ti abbiamo inviato un'email di conferma. Clicca sul link nell'email per attivare il tuo account.
+              <p className="text-[#333333]/80 mb-6 leading-relaxed">
+                Ti abbiamo inviato un'email di verifica. Controlla la tua casella di posta e clicca sul link per attivare il tuo account.
               </p>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                <p className="text-sm text-blue-800">
+                  Sarai reindirizzato al login tra <span className="font-bold">{countdown}</span> secondi...
+                </p>
+              </div>
               <Button 
                 onClick={() => navigate('/auth/login')}
                 fullWidth
               >
-                Vai al Login
+                Vai al Login Ora
               </Button>
             </CardContent>
           </Card>

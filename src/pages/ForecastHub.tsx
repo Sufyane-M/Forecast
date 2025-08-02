@@ -21,6 +21,7 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { supabase } from '../lib/supabase'
 import { useNavigate } from 'react-router-dom'
+import { toast } from 'sonner'
 
 interface ForecastScenario {
   id: string
@@ -88,7 +89,8 @@ export const ForecastHub: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [createLoading, setCreateLoading] = useState(false)
-  const [successMessage, setSuccessMessage] = useState('')
+  const [deletingScenarios, setDeletingScenarios] = useState<Set<string>>(new Set())
+
   const [createForm, setCreateForm] = useState<CreateScenarioForm>({
     name: '',
     month: new Date().getMonth() + 1,
@@ -282,9 +284,10 @@ export const ForecastHub: React.FC = () => {
       // Ricarica gli scenari
       await loadScenarios()
       
-      // Mostra messaggio di successo
-      setSuccessMessage(`Scenario "${newScenario.name}" creato con successo!`)
-      setTimeout(() => setSuccessMessage(''), 5000)
+      // Mostra toast di successo
+      toast.success('Scenario creato con successo', {
+        description: `Lo scenario "${newScenario.name}" è stato creato e configurato.`
+      })
       
       setShowCreateModal(false)
       resetCreateForm()
@@ -326,18 +329,44 @@ export const ForecastHub: React.FC = () => {
   }
 
   const deleteScenario = async (scenarioId: string) => {
-    if (!confirm('Sei sicuro di voler eliminare questo scenario?')) return
+    const scenario = scenarios.find(s => s.id === scenarioId)
+    if (!scenario) return
+
+    // Previeni doppi click
+    if (deletingScenarios.has(scenarioId)) return
+
+    if (!confirm(`Sei sicuro di voler eliminare lo scenario "${scenario.name}"?\n\nQuesta azione è irreversibile e eliminerà anche tutti i dati di forecast associati.`)) return
     
     try {
+      // Aggiungi lo scenario alla lista di quelli in eliminazione
+      setDeletingScenarios(prev => new Set(prev).add(scenarioId))
+      
       const { error } = await supabase
         .from('forecast_scenarios')
         .delete()
         .eq('id', scenarioId)
 
       if (error) throw error
-      await loadScenarios()
+      
+      // Rimuovi lo scenario dalla lista locale invece di ricaricare tutto
+      setScenarios(prevScenarios => prevScenarios.filter(s => s.id !== scenarioId))
+      
+      // Mostra toast di successo
+      toast.success('Scenario eliminato con successo', {
+        description: `Lo scenario "${scenario.name}" è stato eliminato definitivamente.`
+      })
     } catch (error) {
       console.error('Errore nell\'eliminazione:', error)
+      toast.error('Impossibile eliminare lo scenario', {
+        description: 'Si è verificato un errore durante l\'eliminazione. Verifica i tuoi permessi e riprova.'
+      })
+    } finally {
+      // Rimuovi lo scenario dalla lista di quelli in eliminazione
+      setDeletingScenarios(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(scenarioId)
+        return newSet
+      })
     }
   }
 
@@ -380,17 +409,7 @@ export const ForecastHub: React.FC = () => {
         </div>
       </div>
 
-      {/* Success Message */}
-      {successMessage && (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-            <div className="flex items-center">
-              <CheckCircle className="w-5 h-5 text-green-600 mr-2" />
-              <p className="text-green-800 font-medium">{successMessage}</p>
-            </div>
-          </div>
-        </div>
-      )}
+
 
       {/* Statistics */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
@@ -537,9 +556,14 @@ export const ForecastHub: React.FC = () => {
                           size="sm"
                           variant="ghost"
                           onClick={() => deleteScenario(scenario.id)}
-                          className="text-red-600 hover:text-red-700"
+                          disabled={deletingScenarios.has(scenario.id)}
+                          className="text-red-600 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          {deletingScenarios.has(scenario.id) ? (
+                            <div className="w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <Trash2 className="w-4 h-4" />
+                          )}
                         </Button>
                       </div>
                     </div>

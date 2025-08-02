@@ -3,6 +3,8 @@ import { useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { CommentsPanel } from '../components/CommentsPanel'
 import { ForecastEditModal } from '../components/ForecastEditModal'
+import { VirtualizedForecastGrid } from '../components/VirtualizedForecastGrid'
+import { toast } from 'sonner'
 import { 
   Search, 
   Filter, 
@@ -14,7 +16,8 @@ import {
   Edit3,
   Plus,
   X,
-  AlertTriangle
+  AlertTriangle,
+  Trash2
 } from 'lucide-react'
 
 interface ForecastRow {
@@ -91,6 +94,11 @@ export const ForecastSheet: React.FC = () => {
   const [selectedRowForComments, setSelectedRowForComments] = useState<string | null>(null)
   const [showEditModal, setShowEditModal] = useState(false)
   const [selectedRowForEdit, setSelectedRowForEdit] = useState<ForecastRow | null>(null)
+  
+  // Stati per eliminazione
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [selectedRowForDelete, setSelectedRowForDelete] = useState<ForecastRow | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     if (scenarioId) {
@@ -418,7 +426,7 @@ export const ForecastSheet: React.FC = () => {
   }
 
   // Funzioni per gestire i commenti
-  const handleOpenComments = (rowId: string) => {
+  const handleOpenComments = (rowId: string, columnKey?: ForecastColumnKey) => {
     setSelectedRowForComments(rowId)
     setShowCommentsPanel(true)
   }
@@ -450,6 +458,48 @@ export const ForecastSheet: React.FC = () => {
           : row
       )
     )
+  }
+
+  // Funzioni per gestire l'eliminazione
+  const handleOpenDeleteModal = (row: ForecastRow) => {
+    setSelectedRowForDelete(row)
+    setShowDeleteModal(true)
+  }
+
+  const handleCloseDeleteModal = () => {
+    setShowDeleteModal(false)
+    setSelectedRowForDelete(null)
+  }
+
+  const handleConfirmDelete = async () => {
+    if (!selectedRowForDelete) return
+
+    setDeleting(true)
+    try {
+      const { error } = await supabase
+        .from('forecast_data')
+        .delete()
+        .eq('id', selectedRowForDelete.id)
+
+      if (error) throw error
+
+      // Rimuovi la riga dai dati locali
+      setData(prevData => prevData.filter(row => row.id !== selectedRowForDelete.id))
+      
+      // Mostra toast di successo
+      toast.success(`Forecast eliminato con successo`, {
+        description: `${selectedRowForDelete.business_line_name} - ${selectedRowForDelete.client_name}`
+      })
+      
+      handleCloseDeleteModal()
+    } catch (error) {
+      console.error('Errore nell\'eliminazione del forecast:', error)
+      toast.error('Impossibile eliminare il forecast', {
+        description: 'Si è verificato un errore durante l\'eliminazione. Riprova.'
+      })
+    } finally {
+      setDeleting(false)
+    }
   }
 
   const filteredData = data.filter(row => {
@@ -538,113 +588,18 @@ export const ForecastSheet: React.FC = () => {
           </div>
         </div>
 
-        {/* Tabella */}
+        {/* Griglia Virtualizzata */}
         {filteredData.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="min-w-full">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky left-0 bg-gray-50 z-10 min-w-[300px]">
-                    Business Line / Cliente
-                  </th>
-                  {forecastColumns.map(column => (
-                    <th key={column.key} className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px]">
-                      {column.label}
-                    </th>
-                  ))}
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]">
-                    Azioni
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {Object.entries(groupedData).map(([groupKey, rows]) => {
-                  const [businessLineId, businessLineName] = groupKey.split('|')
-                  const isCollapsed = collapsedGroups.has(businessLineId)
-                  
-                  return (
-                    <React.Fragment key={groupKey}>
-                      {/* Business Line Header */}
-                      <tr className="bg-blue-50 hover:bg-blue-100 cursor-pointer" onClick={() => toggleGroup(businessLineId)}>
-                        <td className="px-6 py-4 whitespace-nowrap font-medium text-blue-900 sticky left-0 bg-blue-50 z-10">
-                          <div className="flex items-center">
-                            {isCollapsed ? <ChevronRight className="h-4 w-4 mr-2" /> : <ChevronDown className="h-4 w-4 mr-2" />}
-                            {businessLineName} ({rows.length} clienti)
-                          </div>
-                        </td>
-                        {forecastColumns.map(column => {
-                          const total = rows.reduce((sum, row) => sum + getCellValue(row, column.key), 0)
-                          return (
-                            <td key={column.key} className="px-6 py-4 text-center font-medium text-blue-900">
-                              {formatNumber(total)}
-                            </td>
-                          )
-                        })}
-                        <td className="px-6 py-4 text-center">
-                          <span className="text-xs text-gray-500">Totali</span>
-                        </td>
-                      </tr>
-                      
-                      {/* Client Rows */}
-                      {!isCollapsed && rows.map(row => (
-                        <tr key={row.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 sticky left-0 bg-white z-10">
-                            <div className="pl-8 flex items-center">
-                              {row.client_name}
-                              {comments.filter(c => c.forecast_data_id === row.id).length > 0 && (
-                                <MessageSquare className="w-4 h-4 ml-2 text-purple-600" />
-                              )}
-                            </div>
-                          </td>
-                          {forecastColumns.map(column => {
-                            const value = getCellValue(row, column.key)
-                            const status = getCellStatus(row, column.key)
-                            const hasComments = comments.some(c => c.forecast_data_id === row.id && c.column_name === column.key)
-                            const hasErrors = hasValidationErrors(row, column.key)
-                            const cellColor = getCellColor(status, hasComments, hasErrors)
-                            
-                            return (
-                              <td key={column.key} className={`px-2 py-2 text-center ${cellColor}`}>
-                                <div className="w-full h-full py-2 rounded">
-                                  {value ? formatNumber(value) : '-'}
-                                </div>
-                              </td>
-                            )
-                          })}
-                          <td className="px-6 py-4 text-center">
-                            <div className="flex items-center justify-center space-x-2">
-                              <button
-                                onClick={() => handleOpenComments(row.id)}
-                                className={`relative ${
-                                  row.comments_count > 0 
-                                    ? 'text-purple-600 hover:text-purple-800' 
-                                    : 'text-gray-400 hover:text-purple-600'
-                                }`}
-                                title="Commenti"
-                              >
-                                <MessageSquare className="h-4 w-4" />
-                                {row.comments_count > 0 && (
-                                  <span className="absolute -top-2 -right-2 bg-purple-600 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">
-                                    {row.comments_count}
-                                  </span>
-                                )}
-                              </button>
-                              <button
-                                onClick={() => handleOpenEditModal(row)}
-                                className="text-blue-600 hover:text-blue-800"
-                                title="Modifica"
-                              >
-                                <Edit3 className="h-4 w-4" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </React.Fragment>
-                  )
-                })}
-              </tbody>
-            </table>
+          <div className="h-[600px]">
+            <VirtualizedForecastGrid
+              data={filteredData}
+              comments={comments}
+              onDataChange={setData}
+              onOpenComments={handleOpenComments}
+              onOpenEdit={handleOpenEditModal}
+              onDelete={handleOpenDeleteModal}
+              scenarioId={scenarioId || ''}
+            />
           </div>
         ) : (
           <div className="text-center py-12">
@@ -741,6 +696,90 @@ export const ForecastSheet: React.FC = () => {
         onClose={handleCloseEditModal}
         onSave={handleSaveEditModal}
       />
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && selectedRowForDelete && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl">
+            {/* Header */}
+            <div className="p-6 border-b border-slate-200">
+              <div className="flex items-center space-x-3">
+                <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <Trash2 className="w-6 h-6 text-red-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-slate-900">Elimina Forecast</h3>
+                  <p className="text-sm text-slate-600">Questa azione non è reversibile</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="p-6">
+              <div className="space-y-4">
+                <p className="text-slate-700">
+                  Sei sicuro di voler eliminare questo forecast?
+                </p>
+                
+                <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-sm font-medium text-slate-600">Business Line:</span>
+                      <span className="text-sm text-slate-900">{selectedRowForDelete.business_line_name}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm font-medium text-slate-600">Cliente:</span>
+                      <span className="text-sm text-slate-900">{selectedRowForDelete.client_name}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <div className="flex items-start space-x-3">
+                    <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-medium text-red-800">Attenzione</p>
+                      <p className="text-sm text-red-700 mt-1">
+                        Tutti i dati associati a questo forecast, inclusi commenti e cronologia, verranno eliminati definitivamente.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-6 border-t border-slate-200 bg-slate-50 rounded-b-2xl">
+              <div className="flex items-center justify-end space-x-3">
+                <button
+                  onClick={handleCloseDeleteModal}
+                  disabled={deleting}
+                  className="px-6 py-3 text-slate-700 bg-white border-2 border-slate-200 rounded-xl hover:bg-slate-50 hover:border-slate-300 disabled:opacity-50 transition-all duration-200 font-medium"
+                >
+                  Annulla
+                </button>
+                <button
+                  onClick={handleConfirmDelete}
+                  disabled={deleting}
+                  className="flex items-center px-6 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-semibold shadow-lg hover:shadow-xl"
+                >
+                  {deleting ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-3" />
+                      Eliminazione...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-4 h-4 mr-3" />
+                      Elimina Definitivamente
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

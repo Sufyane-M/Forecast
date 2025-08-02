@@ -1,10 +1,16 @@
 import React, { useEffect } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
+import { Toaster } from 'sonner'
 import { useAuthStore } from './stores/authStore'
 import { ProtectedRoute } from './components/auth/ProtectedRoute'
+import { SessionManager } from './components/SessionManager'
+// Import session test utilities in development
+import './utils/sessionTestUtils'
 import { LoginPage } from './pages/auth/LoginPage'
 import { RegisterPage } from './pages/auth/RegisterPage'
 import { ForgotPasswordPage } from './pages/auth/ForgotPasswordPage'
+import EmailVerificationCallback from './pages/auth/EmailVerificationCallback'
+import EmailVerificationRequired from './pages/auth/EmailVerificationRequired'
 import { Dashboard } from './pages/Dashboard'
 import { ForecastHub } from './pages/ForecastHub'
 import { ForecastSheet } from './pages/ForecastSheet'
@@ -33,6 +39,13 @@ function App() {
 
   return (
     <Router>
+      <SessionManager />
+      <Toaster 
+        position="top-right" 
+        expand={true} 
+        richColors 
+        closeButton 
+      />
       <Routes>
         {/* Public Routes */}
         <Route 
@@ -46,6 +59,14 @@ function App() {
         <Route 
           path="/auth/forgot-password" 
           element={user && profile ? <Navigate to="/dashboard" replace /> : <ForgotPasswordPage />} 
+        />
+        <Route 
+          path="/auth/callback" 
+          element={<EmailVerificationCallback />} 
+        />
+        <Route 
+          path="/auth/email-verification-required" 
+          element={<EmailVerificationRequired />} 
         />
         
         {/* Protected Routes */}

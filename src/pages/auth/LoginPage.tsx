@@ -8,6 +8,7 @@ import { useAuthStore } from '../../stores/authStore'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
 import { Card, CardHeader, CardContent, CardFooter } from '../../components/ui/Card'
+import { MFAVerification } from '../../components/auth/MFAVerification'
 
 const loginSchema = z.object({
   email: z.string().email('Inserisci un indirizzo email valido'),
@@ -20,9 +21,12 @@ export const LoginPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showMFA, setShowMFA] = useState(false)
+  const [emailNotVerified, setEmailNotVerified] = useState<string | null>(null)
+  const [isResendingEmail, setIsResendingEmail] = useState(false)
   
   const navigate = useNavigate()
-  const { signIn } = useAuthStore()
+  const { signIn, mfaRequired, resendEmailVerification } = useAuthStore()
   
   const {
     register,
@@ -35,21 +39,27 @@ export const LoginPage: React.FC = () => {
   const onSubmit = async (data: LoginForm) => {
     setIsLoading(true)
     setError(null)
+    setEmailNotVerified(null)
     
     try {
-      const { error } = await signIn(data.email, data.password)
+      const { error, mfaRequired: needsMFA } = await signIn(data.email, data.password)
       
       if (error) {
         console.error('Login error:', error)
         if (error.message.includes('Invalid login credentials')) {
           setError('Email o password non corretti')
         } else if (error.message.includes('Email not confirmed')) {
-          setError('Conferma il tuo account tramite email prima di accedere')
+          setEmailNotVerified(data.email)
+          setError('⚠️ Il tuo indirizzo email non è ancora stato verificato. Controlla la tua casella di posta per completare la verifica.')
         } else if (error.message.includes('Profilo utente non trovato')) {
           setError('Profilo utente non trovato. Contatta l\'amministratore.')
+        } else if (error.message.includes('Account temporaneamente bloccato')) {
+          setError('Account temporaneamente bloccato per troppi tentativi falliti. Riprova più tardi.')
         } else {
           setError(`Errore durante l'accesso: ${error.message}`)
         }
+      } else if (needsMFA) {
+        setShowMFA(true)
       } else {
         navigate('/dashboard')
       }
@@ -58,6 +68,33 @@ export const LoginPage: React.FC = () => {
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const handleResendEmail = async () => {
+    if (!emailNotVerified) return
+    
+    setIsResendingEmail(true)
+    try {
+      const { error } = await resendEmailVerification(emailNotVerified)
+      if (error) {
+        setError('Errore durante l\'invio dell\'email. Riprova.')
+      } else {
+        setError('✅ Email di verifica inviata! Controlla la tua casella di posta.')
+      }
+    } catch (err) {
+      setError('Errore di connessione. Riprova.')
+    } finally {
+      setIsResendingEmail(false)
+    }
+  }
+
+  const handleMFASuccess = () => {
+    navigate('/dashboard')
+  }
+
+  const handleMFABack = () => {
+    setShowMFA(false)
+    setError(null)
   }
 
   return (
@@ -73,7 +110,13 @@ export const LoginPage: React.FC = () => {
           </p>
         </div>
 
-        <Card variant="elevated">
+        {showMFA ? (
+          <MFAVerification 
+            onSuccess={handleMFASuccess}
+            onBack={handleMFABack}
+          />
+        ) : (
+          <Card variant="elevated">
           <CardHeader 
             title="Accedi al tuo account"
             subtitle="Inserisci le tue credenziali per continuare"
@@ -82,8 +125,29 @@ export const LoginPage: React.FC = () => {
           <CardContent>
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
               {error && (
-                <div className="p-3 rounded-md bg-[#C42024]/10 border border-[#C42024]/20">
-                  <p className="text-sm text-[#C42024]">{error}</p>
+                <div className={`p-3 rounded-md border ${
+                  error.includes('✅') 
+                    ? 'bg-green-50 border-green-200' 
+                    : 'bg-[#C42024]/10 border-[#C42024]/20'
+                }`}>
+                  <p className={`text-sm ${
+                    error.includes('✅') 
+                      ? 'text-green-700' 
+                      : 'text-[#C42024]'
+                  }`}>{error}</p>
+                  {emailNotVerified && !error.includes('✅') && (
+                    <div className="mt-3">
+                      <Button
+                        onClick={handleResendEmail}
+                        loading={isResendingEmail}
+                        variant="outline"
+                        size="sm"
+                        fullWidth
+                      >
+                        Reinvia Email di Verifica
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
               
@@ -152,6 +216,7 @@ export const LoginPage: React.FC = () => {
             </div>
           </CardFooter>
         </Card>
+        )}
         
         <div className="text-center mt-8">
           <p className="text-xs text-[#333333]/40">

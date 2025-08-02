@@ -27,3 +27,6 @@ dist-ssr
 .env
 .env.local
 .env.example
+
+# YoYo AI version control directory
+.yoyo/
